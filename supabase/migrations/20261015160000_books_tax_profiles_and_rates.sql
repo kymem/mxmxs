@@ -415,7 +415,7 @@ declare
   function_source text;
   replacement_source text;
 begin
-  function_source := pg_get_functiondef('public.create_hotel_booking(uuid,jsonb,date,date,integer,integer,text,jsonb,uuid,uuid,text,jsonb)'::regprocedure);
+  function_source := replace(pg_get_functiondef('public.create_hotel_booking(uuid,jsonb,date,date,integer,integer,text,jsonb,uuid,uuid,text,jsonb)'::regprocedure), E'\r', '');
   replacement_source := replace(function_source, '  vat_value numeric;', E'  vat_value numeric;\n  vat_rate_id uuid;\n  vat_rate_percentage numeric(7,4);');
   replacement_source := replace(replacement_source,
     '  vat_value := round(taxable_value * 0.18, currency_decimals);',
@@ -434,7 +434,7 @@ begin
   end if;
   execute replacement_source;
 
-  function_source := pg_get_functiondef('public.apply_books_invoice_tax()'::regprocedure);
+  function_source := replace(pg_get_functiondef('public.apply_books_invoice_tax()'::regprocedure), E'\r', '');
   replacement_source := replace(function_source,
     E'begin\n  if new.tax_rate_id is not null then',
     E'begin\n  if new.invoice_number like ''HOTEL-%'' then\n    select * into selected_booking from public.hotel_bookings\n     where ''HOTEL-'' || confirmation_number = new.invoice_number;\n    if found then\n      new.tax_rate_id := selected_booking.vat_rate_id;\n      new.tax_rate_percentage := selected_booking.vat_rate_percentage;\n      new.tax_amount := selected_booking.vat_amount;\n      return new;\n    end if;\n  end if;\n  if new.tax_rate_id is not null then');
@@ -449,7 +449,7 @@ begin
   end if;
   execute replacement_source;
 
-  function_source := pg_get_functiondef('public.enforce_checkout_invoice_totals()'::regprocedure);
+  function_source := replace(pg_get_functiondef('public.enforce_checkout_invoice_totals()'::regprocedure), E'\r', '');
   replacement_source := replace(function_source,
     E'    new.subtotal := selected_hotel_booking.taxable_subtotal;\n    new.tax_rate_percentage := 18;',
     E'    new.subtotal := selected_hotel_booking.taxable_subtotal;\n    new.tax_rate_id := selected_hotel_booking.vat_rate_id;\n    new.tax_rate_percentage := selected_hotel_booking.vat_rate_percentage;');
@@ -458,7 +458,7 @@ begin
   end if;
   execute replacement_source;
 
-  function_source := pg_get_functiondef('public.post_paid_hotel_booking_to_books()'::regprocedure);
+  function_source := replace(pg_get_functiondef('public.post_paid_hotel_booking_to_books()'::regprocedure), E'\r', '');
   replacement_source := regexp_replace(function_source,
     '  select id into vat_rate_id from public\.books_tax_rates([[:space:]]|.)*?  if vat_rate_id is null then raise exception ''An active Uganda VAT rate could not be created''; end if;',
     '  vat_rate_id := new.vat_rate_id;');
