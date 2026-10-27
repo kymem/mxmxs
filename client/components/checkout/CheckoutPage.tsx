@@ -222,7 +222,7 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({
       : "Multiple currencies";
   };
 
-  const getTax = () => currentServerPricing?.taxAmount ?? roundForDisplay(getMenuPreviewSubtotal() * 0.08);
+  const getTax = () => currentServerPricing?.taxAmount ?? 0;
   const getServiceFee = () => currentServerPricing?.serviceFee ?? roundForDisplay(orderType === "room-service" ? 5 : orderType === "delivery" ? 8 : 0);
   const getFinalTotal = () => currentServerPricing?.totalAmount ?? roundForDisplay(getMenuPreviewSubtotal() + getTax() + getServiceFee() + tipAmount);
 
@@ -514,10 +514,6 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({
           <span>Subtotal</span>
           <span>{formatAmount(getSubtotal())}</span>
         </div>
-        <div className="flex justify-between">
-          <span>Tax (8%)</span>
-          <span>{formatAmount(getTax())}</span>
-        </div>
         {orderType === "room-service" && (
           <div className="flex justify-between">
             <span>Service Fee</span>
@@ -529,6 +525,7 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({
           <span>Total</span>
           <span>{formatAmount(getSubtotal() + getTax() + getServiceFee())}</span>
         </div>
+        <p className="text-xs text-gray-500">Prices include VAT.</p>
       </div>
 
       <div className="flex space-x-3">
@@ -824,10 +821,6 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({
           <div className="flex justify-between">
             <span>Subtotal</span>
             <span>{formatAmount(getSubtotal())}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>Tax</span>
-            <span>{formatAmount(getTax())}</span>
           </div>
           {getServiceFee() > 0 && (
             <div className="flex justify-between">

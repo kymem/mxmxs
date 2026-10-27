@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
@@ -37,6 +37,14 @@ type Confirmation = {
 
 const formatMoney = (value: number, currency: string) => new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 2 }).format(value || 0);
 const formatEntry = (value: number, currency: string) => value > 0 ? formatMoney(value, currency) : "Free";
+
+const getVatBreakdown = (gross: number, currency: string, rate: number | null) => {
+  if (rate === null || gross <= 0 || !currency) return null;
+  const digits = new Intl.NumberFormat(undefined, { style: "currency", currency }).resolvedOptions().maximumFractionDigits ?? 2;
+  const scale = 10 ** digits;
+  const net = Math.round((gross / (1 + rate / 100)) * scale) / scale;
+  return { net, vat: Math.round((gross - net) * scale) / scale };
+};
 
 const getCheckoutErrorMessage = (error: unknown) => {
   if (typeof error === "string" && error.trim()) return error.trim();
@@ -77,6 +85,27 @@ const EventCheckoutModal: React.FC<Props> = ({ isOpen, onClose, cart, events, on
   const quoteIsCurrent = serverQuote?.fingerprint === currentFingerprint;
   const subtotal = quoteIsCurrent ? serverQuote.amount : previewSubtotal;
   const total = subtotal;
+  const [vatRate, setVatRate] = useState<number | null>(null);
+  const selectedEventId = selectedEvent?.id;
+  const displayCurrency = selectedEvent ? (quoteIsCurrent ? serverQuote.currency : selectedEvent.currency) : "";
+  const vatBreakdown = getVatBreakdown(total, displayCurrency, vatRate);
+
+  useEffect(() => {
+    setVatRate(null);
+    if (!selectedEventId) return;
+    let cancelled = false;
+    void supabase.rpc("special_event_vat_rate", { target_event_id: selectedEventId }).then(({ data, error }) => {
+      if (cancelled) return;
+      if (error) {
+        console.error("Unable to load event VAT rate", error);
+        return;
+      }
+      setVatRate(data === null || data === undefined ? null : Number(data));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedEventId]);
 
   const resetModal = () => {
     setStep("tickets");
@@ -219,7 +248,8 @@ const EventCheckoutModal: React.FC<Props> = ({ isOpen, onClose, cart, events, on
   };
 
   if (confirmation) {
-    return <Dialog open={isOpen} onOpenChange={handleClose}><DialogContent className="max-w-md mx-auto"><div className="text-center py-6"><div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4"><CheckCircle className="h-8 w-8 text-green-600" /></div><h2 className="text-2xl font-bold text-sheraton-navy mb-2">{confirmation.total === 0 ? "Registration Confirmed!" : "Event Tickets Confirmed!"}</h2><p className="text-gray-600 mb-6">{confirmation.total === 0 ? "Your free place is confirmed and your attendee ticket is ready." : "Your event booking has been confirmed successfully."}</p><div className="bg-sheraton-cream rounded-lg p-4 mb-6 space-y-2 text-sm"><div className="flex justify-between"><span className="text-gray-600">Confirmation</span><span className="font-semibold text-sheraton-navy">{confirmation.confirmationNumber}</span></div><div className="flex justify-between"><span className="text-gray-600">Ticket code</span><span className="font-semibold text-sheraton-navy">{confirmation.ticketCode}</span></div><div className="flex justify-between"><span className="text-gray-600">Total</span><span className="font-semibold text-sheraton-navy">{formatMoney(confirmation.total, confirmation.currency)}</span></div></div><div className="space-y-3"><Button onClick={handleClose} className="w-full bg-sheraton-gold hover:bg-sheraton-gold/90 text-sheraton-navy"><Ticket className="h-4 w-4 mr-2" />View My Events</Button><Button variant="outline" className="w-full" onClick={() => navigator.clipboard?.writeText(confirmation.ticketCode)}><Download className="h-4 w-4 mr-2" />Copy Ticket Code</Button></div></div></DialogContent></Dialog>;
+    const confirmationVat = getVatBreakdown(confirmation.total, confirmation.currency, vatRate);
+    return <Dialog open={isOpen} onOpenChange={handleClose}><DialogContent className="max-w-md mx-auto"><div className="text-center py-6"><div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4"><CheckCircle className="h-8 w-8 text-green-600" /></div><h2 className="text-2xl font-bold text-sheraton-navy mb-2">{confirmation.total === 0 ? "Registration Confirmed!" : "Event Tickets Confirmed!"}</h2><p className="text-gray-600 mb-6">{confirmation.total === 0 ? "Your free place is confirmed and your attendee ticket is ready." : "Your event booking has been confirmed successfully."}</p><div className="bg-sheraton-cream rounded-lg p-4 mb-6 space-y-2 text-sm"><div className="flex justify-between"><span className="text-gray-600">Confirmation</span><span className="font-semibold text-sheraton-navy">{confirmation.confirmationNumber}</span></div><div className="flex justify-between"><span className="text-gray-600">Ticket code</span><span className="font-semibold text-sheraton-navy">{confirmation.ticketCode}</span></div><div className="flex justify-between"><span className="text-gray-600">Total</span><span className="font-semibold text-sheraton-navy">{formatMoney(confirmation.total, confirmation.currency)}</span></div>{confirmationVat && <div className="flex justify-between"><span className="text-gray-600">VAT ({vatRate}%, included)</span><span className="font-semibold text-sheraton-navy">{formatMoney(confirmationVat.vat, confirmation.currency)}</span></div>}</div><div className="space-y-3"><Button onClick={handleClose} className="w-full bg-sheraton-gold hover:bg-sheraton-gold/90 text-sheraton-navy"><Ticket className="h-4 w-4 mr-2" />View My Events</Button><Button variant="outline" className="w-full" onClick={() => navigator.clipboard?.writeText(confirmation.ticketCode)}><Download className="h-4 w-4 mr-2" />Copy Ticket Code</Button></div></div></DialogContent></Dialog>;
   }
 
   return <Dialog open={isOpen} onOpenChange={handleClose}><DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle className="text-2xl font-bold text-sheraton-navy">{step === "tickets" ? "Reserve a Place" : step === "details" ? "Attendee Information" : step === "payment" ? "Secure Payment" : "Registration Review"}</DialogTitle><div className="mt-4"><Progress value={(["tickets", "details", "payment", "confirmation"].indexOf(step) + 1) * 25} className="h-2" /><div className="flex justify-between mt-2 text-sm text-gray-600"><span>Tickets</span><span>Details</span><span>{total > 0 ? "Payment" : "Registration"}</span><span>Confirmation</span></div></div></DialogHeader><div className="grid lg:grid-cols-3 gap-6"><div className="lg:col-span-2">
@@ -228,7 +258,7 @@ const EventCheckoutModal: React.FC<Props> = ({ isOpen, onClose, cart, events, on
     {step === "payment" && <div className="space-y-6"><div className="rounded-lg border border-sheraton-gold/50 bg-sheraton-cream p-5"><div className="flex items-center gap-3"><CreditCard className="h-6 w-6 text-sheraton-navy" /><div><h3 className="font-semibold text-sheraton-navy">Secure hosted payment</h3><p className="text-sm text-gray-600">You will be redirected to Flutterwave to complete payment securely. Card details are never entered into this application.</p></div></div></div><div className="flex items-center gap-2 text-sm text-gray-600"><Shield className="h-4 w-4" />Payment is verified server-side before tickets are issued.</div></div>}
     {step === "confirmation" && <div className="space-y-6"><h3 className="text-lg font-semibold text-sheraton-navy">Booking Summary</h3>{selectedEvent && <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"><div><p className="font-medium text-sheraton-navy">{selectedEvent.title}</p><p className="text-sm text-gray-600">{formatEventDate(selectedEvent.starts_at, selectedEvent.timezone)} • Qty: {selectedEvent.quantity}</p></div><span className="font-semibold text-sheraton-navy">{formatEntry(total, selectedEvent.currency)}</span></div>}<Separator /><div className="bg-gray-50 rounded-lg p-4"><p className="font-medium text-sheraton-navy">{guestInfo.firstName} {guestInfo.lastName}</p><p className="text-sm text-gray-600 mt-1">{guestInfo.email} • {guestInfo.phone}</p></div></div>}
     {errorMessage && <div role="alert" className="mt-5 flex items-start gap-2 rounded-md bg-red-50 p-3 text-sm text-red-700"><AlertCircle className="h-4 w-4 mt-0.5" />{errorMessage}</div>}
-  </div><div className="lg:col-span-1"><div className="bg-gray-50 rounded-lg p-6 sticky top-6"><h3 className="text-lg font-semibold text-sheraton-navy mb-4">Booking Summary</h3><div className="space-y-3 mb-4"><div className="flex justify-between"><span className="text-gray-600">Subtotal</span><span className="font-medium">{selectedEvent ? formatEntry(subtotal, quoteIsCurrent ? serverQuote.currency : selectedEvent.currency) : "—"}</span></div><Separator /><div className="flex justify-between text-lg font-semibold text-sheraton-navy"><span>Total</span><span>{selectedEvent ? formatEntry(total, quoteIsCurrent ? serverQuote.currency : selectedEvent.currency) : "—"}</span></div></div><div className="flex space-x-2">{step !== "tickets" && <Button variant="outline" onClick={handleBack} className="flex-1"><ArrowLeft className="h-4 w-4 mr-2" />Back</Button>}{step !== "confirmation" ? <Button onClick={handleNext} disabled={isProcessing} className="flex-1 bg-sheraton-gold hover:bg-sheraton-gold/90 text-sheraton-navy">Continue<ArrowRight className="h-4 w-4 ml-2" /></Button> : <Button onClick={() => void handleBookEvents()} disabled={isProcessing} className="flex-1 bg-sheraton-gold hover:bg-sheraton-gold/90 text-sheraton-navy">{isProcessing ? "Processing..." : total > 0 ? "Pay Securely" : "Confirm Booking"}</Button>}</div><div className="mt-4 text-xs text-gray-500 text-center">{total > 0 ? <><div className="mb-1 flex items-center justify-center space-x-1"><Shield className="h-3 w-3" /><span>Secure Payment Processing</span></div><p>Your information is protected and secure</p></> : <p>No payment is required for free registration.</p>}</div></div></div></div></DialogContent></Dialog>;
+  </div><div className="lg:col-span-1"><div className="bg-gray-50 rounded-lg p-6 sticky top-6"><h3 className="text-lg font-semibold text-sheraton-navy mb-4">Booking Summary</h3><div className="space-y-3 mb-4">{vatBreakdown ? <><div className="flex justify-between"><span className="text-gray-600">Ticket price (excl. VAT)</span><span className="font-medium">{formatMoney(vatBreakdown.net, displayCurrency)}</span></div><div className="flex justify-between text-sm"><span className="text-gray-600">VAT ({vatRate}%, included)</span><span className="font-medium">{formatMoney(vatBreakdown.vat, displayCurrency)}</span></div></> : <div className="flex justify-between"><span className="text-gray-600">Subtotal</span><span className="font-medium">{selectedEvent ? formatEntry(subtotal, displayCurrency) : "—"}</span></div>}<Separator /><div className="flex justify-between text-lg font-semibold text-sheraton-navy"><span>Total</span><span>{selectedEvent ? formatEntry(total, quoteIsCurrent ? serverQuote.currency : selectedEvent.currency) : "—"}</span></div></div><div className="flex space-x-2">{step !== "tickets" && <Button variant="outline" onClick={handleBack} className="flex-1"><ArrowLeft className="h-4 w-4 mr-2" />Back</Button>}{step !== "confirmation" ? <Button onClick={handleNext} disabled={isProcessing} className="flex-1 bg-sheraton-gold hover:bg-sheraton-gold/90 text-sheraton-navy">Continue<ArrowRight className="h-4 w-4 ml-2" /></Button> : <Button onClick={() => void handleBookEvents()} disabled={isProcessing} className="flex-1 bg-sheraton-gold hover:bg-sheraton-gold/90 text-sheraton-navy">{isProcessing ? "Processing..." : total > 0 ? "Pay Securely" : "Confirm Booking"}</Button>}</div><div className="mt-4 text-xs text-gray-500 text-center">{total > 0 ? <><div className="mb-1 flex items-center justify-center space-x-1"><Shield className="h-3 w-3" /><span>Secure Payment Processing</span></div><p>Your information is protected and secure</p></> : <p>No payment is required for free registration.</p>}</div></div></div></div></DialogContent></Dialog>;
 };
 
 export default EventCheckoutModal;
