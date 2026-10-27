@@ -457,15 +457,67 @@ begin
     raise exception 'Could not safely update hotel invoice rate snapshots';
   end if;
   execute replacement_source;
-
-  function_source := replace(pg_get_functiondef('public.post_paid_hotel_booking_to_books()'::regprocedure), E'\r', '');
-  replacement_source := regexp_replace(function_source,
-    '  select id into vat_rate_id from public\.books_tax_rates([[:space:]]|.)*?  if vat_rate_id is null then raise exception ''An active Uganda VAT rate could not be created''; end if;',
-    '  vat_rate_id := new.vat_rate_id;');
-  replacement_source := replace(replacement_source, 'new.currency_code, new.taxable_subtotal, vat_rate_id, 18, new.lht_amount', 'new.currency_code, new.taxable_subtotal, vat_rate_id, new.vat_rate_percentage, new.lht_amount');
-  if replacement_source = function_source or position('new.vat_rate_percentage, new.lht_amount' in replacement_source) = 0 then
-    raise exception 'Could not safely update hotel invoice posting to use the booking tax snapshot';
-  end if;
-  execute replacement_source;
 end;
 $$;
+
+create or replace function public.post_paid_hotel_booking_to_books()
+returns trigger language plpgsql security definer set search_path = public
+as $$
+declare
+  customer_contact_id uuid;
+  invoice_uuid uuid;
+  organization_name text;
+  room_name text;
+begin
+  if new.payment_status <> 'paid' or new.books_invoice_id is not null then
+    return new;
+  end if;
+
+  insert into public.books_accounts (organization_id, code, name, type, is_system)
+  values
+    (new.organization_id, '1000', 'Cash and bank', 'asset', true),
+    (new.organization_id, '1100', 'Accounts receivable', 'asset', true),
+    (new.organization_id, '2100', 'VAT payable', 'liability', true),
+    (new.organization_id, '2200', 'Local hotel tax payable', 'liability', true),
+    (new.organization_id, '4000', 'Sales revenue', 'income', true)
+  on conflict (organization_id, code) do nothing;
+
+  select name into organization_name from public.books_organizations where id = new.organization_id;
+  select name into room_name from public.hotel_rooms where id = new.room_id;
+  select id into customer_contact_id from public.books_contacts
+   where organization_id = new.organization_id and lower(email) = lower(new.guest_email) and type in ('customer', 'both')
+   order by created_at limit 1;
+  if customer_contact_id is null then
+    insert into public.books_contacts (organization_id, name, type, email, phone)
+    values (new.organization_id, trim(new.guest_first_name || ' ' || new.guest_last_name), 'customer', new.guest_email, new.guest_phone)
+    returning id into customer_contact_id;
+  end if;
+
+  insert into public.books_invoices (
+    organization_id, contact_id, invoice_number, issue_date, due_date, currency_code, subtotal,
+    tax_rate_id, tax_rate_percentage, other_charges, status, notes
+  ) values (
+    new.organization_id, customer_contact_id, 'HOTEL-' || new.confirmation_number, current_date, current_date,
+    new.currency_code, new.taxable_subtotal, new.vat_rate_id, new.vat_rate_percentage, new.lht_amount, 'draft',
+    'Room reservation ' || new.confirmation_number || ' at ' || coalesce(organization_name, 'Hotel') ||
+    '. Room: ' || coalesce(room_name, 'Room') || '. Check-in ' || new.check_in::text ||
+    ', check-out ' || new.check_out::text || '. Hotel classification: ' || new.hotel_classification || ' stars.'
+  ) returning id into invoice_uuid;
+
+  insert into public.books_invoice_lines (invoice_id, organization_id, description, quantity, unit_price)
+  values (invoice_uuid, new.organization_id, 'Accommodation (' || new.nights || ' night(s))', 1, new.taxable_subtotal);
+  update public.books_invoices set status = 'paid' where id = invoice_uuid;
+  perform public.post_hotel_invoice_recognition(invoice_uuid);
+  update public.hotel_bookings
+     set books_invoice_id = invoice_uuid, books_accounting_status = 'posted', books_accounting_error = null
+   where id = new.id;
+  return new;
+exception when others then
+  update public.hotel_bookings
+     set books_accounting_status = 'failed', books_accounting_error = left(sqlerrm, 2000)
+   where id = new.id;
+  return new;
+end;
+$$;
+
+revoke all on function public.post_paid_hotel_booking_to_books() from public;
