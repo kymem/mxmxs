@@ -149,8 +149,7 @@ const ShopCheckoutModal: React.FC<ShopCheckoutModalProps> = ({
   };
 
   const shippingCost = subtotal >= 100 ? 0 : shippingCosts[shippingMethod];
-  const tax = subtotal * 0.08;
-  const total = subtotal + shippingCost + tax;
+  const total = subtotal + shippingCost;
 
   const getStepProgress = () => {
     const steps = ["cart", "shipping", "payment", "confirmation"];
@@ -878,10 +877,6 @@ const ShopCheckoutModal: React.FC<ShopCheckoutModalProps> = ({
                   <span className="font-medium">
                     {shippingCost === 0 ? "FREE" : `$${shippingCost.toFixed(2)}`}
                   </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Tax</span>
-                  <span className="font-medium">${tax.toFixed(2)}</span>
                 </div>
                 <Separator />
                 <div className="flex justify-between text-lg font-semibold text-sheraton-navy">

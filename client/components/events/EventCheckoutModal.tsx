@@ -10,6 +10,7 @@ import { Badge } from "../ui/badge";
 import { Progress } from "../ui/progress";
 import { Calendar, MapPin, User, Phone, Mail, Receipt, CheckCircle, AlertCircle, CreditCard, Shield, ArrowLeft, ArrowRight, Minus, Plus, X, Ticket, Award, Download } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import { getVatIncludedBreakdown } from "../../lib/vat";
 import { formatEventDate, type SpecialEvent } from "../../lib/events";
 
 type CheckoutEvent = SpecialEvent & { quantity: number };
@@ -38,13 +39,6 @@ type Confirmation = {
 const formatMoney = (value: number, currency: string) => new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 2 }).format(value || 0);
 const formatEntry = (value: number, currency: string) => value > 0 ? formatMoney(value, currency) : "Free";
 
-const getVatBreakdown = (gross: number, currency: string, rate: number | null) => {
-  if (rate === null || gross <= 0 || !currency) return null;
-  const digits = new Intl.NumberFormat(undefined, { style: "currency", currency }).resolvedOptions().maximumFractionDigits ?? 2;
-  const scale = 10 ** digits;
-  const net = Math.round((gross / (1 + rate / 100)) * scale) / scale;
-  return { net, vat: Math.round((gross - net) * scale) / scale };
-};
 
 const getCheckoutErrorMessage = (error: unknown) => {
   if (typeof error === "string" && error.trim()) return error.trim();
@@ -88,7 +82,7 @@ const EventCheckoutModal: React.FC<Props> = ({ isOpen, onClose, cart, events, on
   const [vatRate, setVatRate] = useState<number | null>(null);
   const selectedEventId = selectedEvent?.id;
   const displayCurrency = selectedEvent ? (quoteIsCurrent ? serverQuote.currency : selectedEvent.currency) : "";
-  const vatBreakdown = getVatBreakdown(total, displayCurrency, vatRate);
+  const vatBreakdown = getVatIncludedBreakdown(total, displayCurrency, vatRate);
 
   useEffect(() => {
     setVatRate(null);
@@ -248,7 +242,7 @@ const EventCheckoutModal: React.FC<Props> = ({ isOpen, onClose, cart, events, on
   };
 
   if (confirmation) {
-    const confirmationVat = getVatBreakdown(confirmation.total, confirmation.currency, vatRate);
+    const confirmationVat = getVatIncludedBreakdown(confirmation.total, confirmation.currency, vatRate);
     return <Dialog open={isOpen} onOpenChange={handleClose}><DialogContent className="max-w-md mx-auto"><div className="text-center py-6"><div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4"><CheckCircle className="h-8 w-8 text-green-600" /></div><h2 className="text-2xl font-bold text-sheraton-navy mb-2">{confirmation.total === 0 ? "Registration Confirmed!" : "Event Tickets Confirmed!"}</h2><p className="text-gray-600 mb-6">{confirmation.total === 0 ? "Your free place is confirmed and your attendee ticket is ready." : "Your event booking has been confirmed successfully."}</p><div className="bg-sheraton-cream rounded-lg p-4 mb-6 space-y-2 text-sm"><div className="flex justify-between"><span className="text-gray-600">Confirmation</span><span className="font-semibold text-sheraton-navy">{confirmation.confirmationNumber}</span></div><div className="flex justify-between"><span className="text-gray-600">Ticket code</span><span className="font-semibold text-sheraton-navy">{confirmation.ticketCode}</span></div><div className="flex justify-between"><span className="text-gray-600">Total</span><span className="font-semibold text-sheraton-navy">{formatMoney(confirmation.total, confirmation.currency)}</span></div>{confirmationVat && <div className="flex justify-between"><span className="text-gray-600">VAT ({vatRate}%, included)</span><span className="font-semibold text-sheraton-navy">{formatMoney(confirmationVat.vat, confirmation.currency)}</span></div>}</div><div className="space-y-3"><Button onClick={handleClose} className="w-full bg-sheraton-gold hover:bg-sheraton-gold/90 text-sheraton-navy"><Ticket className="h-4 w-4 mr-2" />View My Events</Button><Button variant="outline" className="w-full" onClick={() => navigator.clipboard?.writeText(confirmation.ticketCode)}><Download className="h-4 w-4 mr-2" />Copy Ticket Code</Button></div></div></DialogContent></Dialog>;
   }
 
