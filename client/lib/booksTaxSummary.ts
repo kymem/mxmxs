@@ -36,7 +36,11 @@ export type TaxSummaryExpense = {
   tax_amount: number;
   payment_status: "paid" | "unpaid" | "refunded";
   tax_treatment: "deductible" | "non_deductible" | "review";
+  vat_recoverable: boolean;
 };
+
+const expenseCost = (expense: TaxSummaryExpense) =>
+  Number(expense.amount) + (expense.vat_recoverable ? 0 : Number(expense.tax_amount));
 
 export const calculateBooksTaxSummary = (
   invoices: TaxSummaryInvoice[],
@@ -64,12 +68,14 @@ export const calculateBooksTaxSummary = (
     invoiceTax: periodInvoices.reduce((total, invoice) => total + Number(invoice.tax_amount), 0),
     allowableDeductions: periodExpenses
       .filter((expense) => expense.tax_treatment === "deductible")
-      .reduce((total, expense) => total + Number(expense.amount), 0),
+      .reduce((total, expense) => total + expenseCost(expense), 0),
     nonDeductibleExpenses: periodExpenses
       .filter((expense) => expense.tax_treatment === "non_deductible")
-      .reduce((total, expense) => total + Number(expense.amount), 0),
+      .reduce((total, expense) => total + expenseCost(expense), 0),
     expensesToReview: periodExpenses.filter((expense) => expense.tax_treatment === "review").length,
-    expenseTax: periodExpenses.reduce((total, expense) => total + Number(expense.tax_amount), 0),
+    recoverableInputVat: periodExpenses
+      .filter((expense) => expense.vat_recoverable)
+      .reduce((total, expense) => total + Number(expense.tax_amount), 0),
   };
 };
 
