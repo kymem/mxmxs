@@ -256,6 +256,8 @@ const createBooking: RequestHandler = async (request, response) => {
           last_name: safeText(body.guest?.lastName, 100),
           email,
           phone: safeText(body.guest?.phone, 40),
+          business_purchase: body.guest?.businessPurchase === true,
+          buyer_tax_id: safeText(body.guest?.buyerTaxId, 30),
         },
         target_check_in: body.checkIn,
         target_check_out: body.checkOut,

@@ -1382,7 +1382,7 @@ const ServicesProfilePage = () => {
                     <p className="text-xs text-muted-foreground">Used on your Personal Books purchase records when you buy for a business.</p>
                   </div>
                   <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="buyerTin">Business TIN (optional)</Label>
+                    <Label htmlFor="buyerTin">TIN, BRN or NIN (optional)</Label>
                     <Input
                       id="buyerTin"
                       value={userData.buyerTin}
@@ -1392,7 +1392,7 @@ const ServicesProfilePage = () => {
                       }}
                       disabled={!isEditing}
                     />
-                    <p className="text-xs text-muted-foreground">Leave blank for personal purchases. Saved once and applied to future purchases.</p>
+                    <p className="text-xs text-muted-foreground">Leave blank for personal purchases. Needed only for business purchases; saved and reused for future ones.</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="firstName">First Name *</Label>

@@ -183,7 +183,7 @@ function isValidEmail(value: string | null | undefined): value is string {
 
 async function createInvoicePdf(invoiceId: string): Promise<InvoiceDocument> {
   const client = supabase();
-  const { data: invoice, error: invoiceError } = await client.from("books_invoices").select("id,invoice_number,issue_date,due_date,currency_code,subtotal,tax_amount,other_charges,total_due,organization_id,contact_id,receipt_storage_key,notes").eq("id", invoiceId).single();
+  const { data: invoice, error: invoiceError } = await client.from("books_invoices").select("id,invoice_number,issue_date,due_date,currency_code,subtotal,tax_amount,other_charges,total_due,organization_id,contact_id,receipt_storage_key,notes,buyer_tax_id").eq("id", invoiceId).single();
   if (invoiceError || !invoice) throw invoiceError || new Error("Invoice not found");
   if (!invoice.contact_id) throw new Error("Paid invoice has no customer contact");
   const { data: loyaltyData, error: loyaltyError } = await client.rpc("get_paid_invoice_loyalty_receipt", { target_invoice_id: invoice.id });
@@ -213,6 +213,7 @@ async function createInvoicePdf(invoiceId: string): Promise<InvoiceDocument> {
   document.fontSize(12).text(`Bill to: ${contact.name}`);
   if (contact.email) document.fontSize(10).text(contact.email);
   if (contact.tax_id) document.fontSize(10).text(`Tax ID: ${contact.tax_id}`);
+  if (invoice.buyer_tax_id) document.fontSize(10).text(`Buyer TIN / BRN / NIN: ${invoice.buyer_tax_id}`);
   if (invoice.notes) document.fontSize(10).text(invoice.notes);
   document.moveDown();
   document.fontSize(11).text("Description").text("Amount", { align: "right" });

@@ -489,7 +489,7 @@ const RegisterPage: React.FC = () => {
           />
         </div>
         <div>
-          <label htmlFor="buyerTin" className="block text-sm font-medium mb-2">Business TIN (optional)</label>
+          <label htmlFor="buyerTin" className="block text-sm font-medium mb-2">TIN, BRN or NIN (optional)</label>
           <Input
             id="buyerTin"
             value={formData.buyerTin}

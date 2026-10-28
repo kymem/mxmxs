@@ -44,6 +44,7 @@ import { supabase } from "../../lib/supabase";
 import { getVatIncludedBreakdown } from "../../lib/vat";
 import { syncActiveMenuCart } from "../../lib/menuCart";
 import { useHotelTenant } from "../../lib/hotelTenant";
+import { BuyerTaxIdentityFields, resolveBuyerTaxId, useSavedBuyerTaxId } from "./BuyerTaxIdentityFields";
 
 interface MenuItem {
   id: string;
@@ -212,6 +213,11 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({
     return currencies.size === 1 ? [...currencies][0] : null;
   };
 
+  const [businessPurchase, setBusinessPurchase] = useState(false);
+  const [typedBuyerTaxId, setTypedBuyerTaxId] = useState("");
+  const savedBuyerTax = useSavedBuyerTaxId();
+  const resolvedBuyerTaxId = resolveBuyerTaxId(businessPurchase, typedBuyerTaxId, savedBuyerTax.savedTaxId);
+
   const customerSnapshot = {
     firstName: customerInfo.firstName.trim(),
     lastName: customerInfo.lastName.trim(),
@@ -220,6 +226,8 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({
     roomNumber: customerInfo.roomNumber.trim(),
     deliveryAddress: customerInfo.deliveryAddress.trim(),
     specialRequests: customerInfo.specialRequests.trim(),
+    businessPurchase,
+    buyerTaxId: resolvedBuyerTaxId,
   };
   const requestedItems = Object.entries(cart).map(([menuItemId, quantity]) => ({ menuItemId, quantity }));
   const currentFingerprint = JSON.stringify({
@@ -666,6 +674,15 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({
         />
       </div>
 
+      <BuyerTaxIdentityFields
+        businessPurchase={businessPurchase}
+        onBusinessPurchaseChange={setBusinessPurchase}
+        typedTaxId={typedBuyerTaxId}
+        onTypedTaxIdChange={setTypedBuyerTaxId}
+        savedTaxId={savedBuyerTax.savedTaxId}
+        loaded={savedBuyerTax.loaded}
+      />
+
       <div className="flex space-x-3">
         <Button
           variant="outline"
@@ -683,7 +700,8 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({
             !customerInfo.lastName ||
             !customerInfo.phone ||
             (orderType === "room-service" && !customerInfo.roomNumber) ||
-            (orderType === "delivery" && !customerInfo.deliveryAddress)
+            (orderType === "delivery" && !customerInfo.deliveryAddress) ||
+            (businessPurchase && !resolvedBuyerTaxId)
           }
         >
           Continue to Payment
