@@ -121,6 +121,7 @@ declare
   buyer_vat_registered boolean;
   purchase_vat_rate numeric;
   purchase_vat_amount numeric;
+  vat_base numeric;
   recoverable boolean;
 begin
   select * into purchase_row
@@ -169,12 +170,19 @@ begin
       from public.hotel_bookings booking
      where booking.id = purchase_row.source_id;
   else
+    if purchase_row.source_type = 'menu_order' then
+      select * into menu_order from public.menu_orders where id = purchase_row.source_id;
+      vat_base := menu_order.subtotal + menu_order.tax_amount - menu_order.points_discount;
+    else
+      vat_base := purchase_row.amount;
+    end if;
+    vat_base := least(greatest(coalesce(vat_base, 0), 0), purchase_row.amount);
     purchase_vat_rate := public.books_confirmed_invoice_vat_rate(
       purchase_row.hotel_organization_id, purchase_row.purchase_date
     );
     if purchase_vat_rate is not null then
-      purchase_vat_amount := purchase_row.amount - round(
-        purchase_row.amount / (1 + purchase_vat_rate / 100),
+      purchase_vat_amount := vat_base - round(
+        vat_base / (1 + purchase_vat_rate / 100),
         public.checkout_currency_minor_units(purchase_row.currency_code)
       );
     end if;
@@ -184,7 +192,6 @@ begin
 
   expense_description := purchase_row.description;
   if purchase_row.source_type = 'menu_order' then
-    select * into menu_order from public.menu_orders where id = purchase_row.source_id;
     select string_agg(
       format('%s (%s × %s)', item.item_name, item.quantity, to_char(item.unit_price, 'FM999999999999990D00')),
       ', ' order by item.created_at, item.id
