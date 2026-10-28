@@ -48,6 +48,8 @@ const RegisterPage: React.FC = () => {
     organizationName: "",
     hotelStarRating: "",
     taxEntityType: "",
+    buyerBusinessName: "",
+    buyerTin: "",
     firstName: "",
     lastName: "",
     email: "",
@@ -175,6 +177,8 @@ const RegisterPage: React.FC = () => {
             organization_name: formData.role === "manager" ? formData.organizationName : null,
             hotel_star_rating: formData.role === "manager" && formData.hotelStarRating ? Number(formData.hotelStarRating) : null,
             tax_entity_type: formData.role === "manager" ? formData.taxEntityType || null : null,
+            buyer_business_name: formData.buyerBusinessName.trim() || null,
+            buyer_tin: formData.buyerTin.trim() || null,
             first_name: formData.firstName,
             last_name: formData.lastName,
             phone: formData.phone,
@@ -206,6 +210,8 @@ const RegisterPage: React.FC = () => {
         organization_name: formData.role === "manager" ? formData.organizationName.trim() : null,
         hotel_star_rating: formData.role === "manager" && formData.hotelStarRating ? Number(formData.hotelStarRating) : null,
         tax_entity_type: formData.role === "manager" ? formData.taxEntityType || null : null,
+        buyer_business_name: formData.buyerBusinessName.trim() || null,
+        buyer_tin: formData.buyerTin.trim() || null,
         first_name: formData.firstName,
         last_name: formData.lastName,
         email: formData.email,
@@ -471,6 +477,28 @@ const RegisterPage: React.FC = () => {
           <p className="mt-1 text-xs text-muted-foreground">Used to present the relevant income-tax setup in Books. You can change it later.</p>
         </div>
       )}
+
+      <div className="space-y-4">
+        <div>
+          <label htmlFor="buyerBusinessName" className="block text-sm font-medium mb-2">Business name (optional)</label>
+          <Input
+            id="buyerBusinessName"
+            value={formData.buyerBusinessName}
+            onChange={(e) => setFormData((prev) => ({ ...prev, buyerBusinessName: e.target.value }))}
+            placeholder="Only if you buy for a business"
+          />
+        </div>
+        <div>
+          <label htmlFor="buyerTin" className="block text-sm font-medium mb-2">TIN, BRN or NIN (optional)</label>
+          <Input
+            id="buyerTin"
+            value={formData.buyerTin}
+            onChange={(e) => setFormData((prev) => ({ ...prev, buyerTin: e.target.value }))}
+            placeholder="Leave blank for personal purchases"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">You can add or change these later in your profile.</p>
+        </div>
+      </div>
 
       <div className="grid md:grid-cols-2 gap-4">
         <div>

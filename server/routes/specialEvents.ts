@@ -236,6 +236,8 @@ export const createSpecialEventBooking: RequestHandler = async (req, res) => {
       attendeeNames?: string[];
       invitationId?: string | null;
       shareToken?: string | null;
+      businessPurchase?: boolean;
+      buyerTaxId?: string | null;
     };
     if (!input.eventId || !/^[0-9a-f-]{36}$/i.test(input.eventId)
       || !Number.isInteger(input.quantity) || !input.idempotencyKey || !/^[0-9a-f-]{8}-[0-9a-f-]{4}-[0-9a-f-]{4}-[0-9a-f-]{4}-[0-9a-f-]{12}$/i.test(input.idempotencyKey)) {
@@ -258,6 +260,8 @@ export const createSpecialEventBooking: RequestHandler = async (req, res) => {
         target_attendee_names: input.attendeeNames || null,
         target_invitation_id: input.invitationId || null,
         target_share_token: input.shareToken || null,
+        target_business_purchase: input.businessPurchase === true,
+        target_buyer_tax_id: input.buyerTaxId || null,
       },
     );
     const [booking] = rows;

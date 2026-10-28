@@ -41,8 +41,10 @@ import {
 } from "lucide-react";
 import { clearPendingCheckout, type FlutterwaveHostedSession, type ResumableMenuOrder } from "../../lib/flutterwave";
 import { supabase } from "../../lib/supabase";
+import { getVatIncludedBreakdown } from "../../lib/vat";
 import { syncActiveMenuCart } from "../../lib/menuCart";
 import { useHotelTenant } from "../../lib/hotelTenant";
+import { BuyerTaxIdentityFields, resolveBuyerTaxId, useSavedBuyerTaxId } from "./BuyerTaxIdentityFields";
 
 interface MenuItem {
   id: string;
@@ -114,6 +116,7 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({
   const [estimatedTime, setEstimatedTime] = useState("25-30 minutes");
   const [orderNumber, setOrderNumber] = useState("");
   const [checkoutError, setCheckoutError] = useState("");
+  const [menuVatRate, setMenuVatRate] = useState<number | null>(null);
   const isMountedRef = useRef(true);
 
   useEffect(() => {
@@ -158,6 +161,24 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({
     loadProfile().catch((error) => console.error("Unable to load checkout profile", error));
   }, []);
 
+  const cartItemIdsKey = Object.keys(cart).sort().join(",");
+  useEffect(() => {
+    setMenuVatRate(null);
+    if (!cartItemIdsKey) return;
+    let cancelled = false;
+    void supabase.rpc("menu_items_vat_rate", { target_menu_item_ids: cartItemIdsKey.split(",") }).then(({ data, error }) => {
+      if (cancelled) return;
+      if (error) {
+        console.error("Unable to load menu VAT rate", error);
+        return;
+      }
+      setMenuVatRate(data === null || data === undefined ? null : Number(data));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [cartItemIdsKey]);
+
   const updateCartItem = (itemId: string, quantity: number) => {
     setPendingPaymentOrder(null);
     onUpdateCart(itemId, quantity);
@@ -192,6 +213,11 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({
     return currencies.size === 1 ? [...currencies][0] : null;
   };
 
+  const [businessPurchase, setBusinessPurchase] = useState(false);
+  const [typedBuyerTaxId, setTypedBuyerTaxId] = useState("");
+  const savedBuyerTax = useSavedBuyerTaxId();
+  const resolvedBuyerTaxId = resolveBuyerTaxId(businessPurchase, typedBuyerTaxId, savedBuyerTax.savedTaxId);
+
   const customerSnapshot = {
     firstName: customerInfo.firstName.trim(),
     lastName: customerInfo.lastName.trim(),
@@ -200,6 +226,8 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({
     roomNumber: customerInfo.roomNumber.trim(),
     deliveryAddress: customerInfo.deliveryAddress.trim(),
     specialRequests: customerInfo.specialRequests.trim(),
+    businessPurchase,
+    buyerTaxId: resolvedBuyerTaxId,
   };
   const requestedItems = Object.entries(cart).map(([menuItemId, quantity]) => ({ menuItemId, quantity }));
   const currentFingerprint = JSON.stringify({
@@ -222,7 +250,8 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({
       : "Multiple currencies";
   };
 
-  const getTax = () => currentServerPricing?.taxAmount ?? roundForDisplay(getMenuPreviewSubtotal() * 0.08);
+  const getTax = () => currentServerPricing?.taxAmount ?? 0;
+  const vatIncluded = getVatIncludedBreakdown(getSubtotal(), currentServerPricing?.currency || getCurrency() || "", menuVatRate);
   const getServiceFee = () => currentServerPricing?.serviceFee ?? roundForDisplay(orderType === "room-service" ? 5 : orderType === "delivery" ? 8 : 0);
   const getFinalTotal = () => currentServerPricing?.totalAmount ?? roundForDisplay(getMenuPreviewSubtotal() + getTax() + getServiceFee() + tipAmount);
 
@@ -514,10 +543,6 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({
           <span>Subtotal</span>
           <span>{formatAmount(getSubtotal())}</span>
         </div>
-        <div className="flex justify-between">
-          <span>Tax (8%)</span>
-          <span>{formatAmount(getTax())}</span>
-        </div>
         {orderType === "room-service" && (
           <div className="flex justify-between">
             <span>Service Fee</span>
@@ -529,6 +554,13 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({
           <span>Total</span>
           <span>{formatAmount(getSubtotal() + getTax() + getServiceFee())}</span>
         </div>
+        {vatIncluded && (
+          <div className="flex justify-between text-xs text-gray-500">
+            <span>Includes VAT ({menuVatRate}%)</span>
+            <span>{formatAmount(vatIncluded.vat)}</span>
+          </div>
+        )}
+        <p className="text-xs text-gray-500">Prices include VAT.</p>
       </div>
 
       <div className="flex space-x-3">
@@ -642,6 +674,15 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({
         />
       </div>
 
+      <BuyerTaxIdentityFields
+        businessPurchase={businessPurchase}
+        onBusinessPurchaseChange={setBusinessPurchase}
+        typedTaxId={typedBuyerTaxId}
+        onTypedTaxIdChange={setTypedBuyerTaxId}
+        savedTaxId={savedBuyerTax.savedTaxId}
+        loaded={savedBuyerTax.loaded}
+      />
+
       <div className="flex space-x-3">
         <Button
           variant="outline"
@@ -659,7 +700,8 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({
             !customerInfo.lastName ||
             !customerInfo.phone ||
             (orderType === "room-service" && !customerInfo.roomNumber) ||
-            (orderType === "delivery" && !customerInfo.deliveryAddress)
+            (orderType === "delivery" && !customerInfo.deliveryAddress) ||
+            (businessPurchase && !resolvedBuyerTaxId)
           }
         >
           Continue to Payment
@@ -825,10 +867,12 @@ const CheckoutPage: React.FC<CheckoutPageProps> = ({
             <span>Subtotal</span>
             <span>{formatAmount(getSubtotal())}</span>
           </div>
-          <div className="flex justify-between">
-            <span>Tax</span>
-            <span>{formatAmount(getTax())}</span>
-          </div>
+          {vatIncluded && (
+            <div className="flex justify-between text-xs text-gray-500">
+              <span>Includes VAT ({menuVatRate}%)</span>
+              <span>{formatAmount(vatIncluded.vat)}</span>
+            </div>
+          )}
           {getServiceFee() > 0 && (
             <div className="flex justify-between">
               <span>Service Fee</span>

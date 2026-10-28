@@ -147,8 +147,7 @@ const TravelCheckoutModal: React.FC<TravelCheckoutModalProps> = ({
     photoPackage: preferences.photoPackage ? 75 : 0,
   };
   const addOnTotal = Object.values(addOns).reduce((sum, cost) => sum + cost, 0);
-  const tax = (subtotal + addOnTotal) * 0.08;
-  const total = subtotal + addOnTotal + tax;
+  const total = subtotal + addOnTotal;
 
   const getStepProgress = () => {
     const steps = ["experiences", "travelers", "payment", "confirmation"];
@@ -841,10 +840,6 @@ const TravelCheckoutModal: React.FC<TravelCheckoutModalProps> = ({
                     <span className="font-medium">${addOns.photoPackage.toFixed(2)}</span>
                   </div>
                 )}
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Tax</span>
-                  <span className="font-medium">${tax.toFixed(2)}</span>
-                </div>
                 <Separator />
                 <div className="flex justify-between text-lg font-semibold text-sheraton-navy">
                   <span>Total</span>
