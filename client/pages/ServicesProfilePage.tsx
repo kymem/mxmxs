@@ -152,6 +152,8 @@ const ServicesProfilePage = () => {
     organizationName: "",
     hotelStarRating: "",
     taxEntityType: "",
+    buyerBusinessName: "",
+    buyerTin: "",
     firstName: "",
     lastName: "",
     email: "",
@@ -190,7 +192,9 @@ const ServicesProfilePage = () => {
                            fieldName === 'lastName' ? 'last_name' :
                            fieldName === 'organizationName' ? 'organization_name' :
                            fieldName === 'hotelStarRating' ? 'hotel_star_rating' :
-                           fieldName === 'taxEntityType' ? 'tax_entity_type' : fieldName;
+                           fieldName === 'taxEntityType' ? 'tax_entity_type' :
+                           fieldName === 'buyerBusinessName' ? 'buyer_business_name' :
+                           fieldName === 'buyerTin' ? 'buyer_tin' : fieldName;
 
         const { error } = await supabase
           .from("user_profiles")
@@ -271,6 +275,8 @@ const ServicesProfilePage = () => {
           organizationName: resolvedProfile?.organization_name || metadata.organization_name || "",
           hotelStarRating: resolvedProfile?.hotel_star_rating ? String(resolvedProfile.hotel_star_rating) : "",
           taxEntityType: resolvedProfile?.tax_entity_type || metadata.tax_entity_type || "",
+          buyerBusinessName: resolvedProfile?.buyer_business_name || "",
+          buyerTin: resolvedProfile?.buyer_tin || "",
           firstName: resolvedProfile?.first_name || metadata.first_name || "",
           lastName: resolvedProfile?.last_name || metadata.last_name || "",
           email: user.email || "",
@@ -1362,6 +1368,32 @@ const ServicesProfilePage = () => {
                       </div>
                     </>
                   )}
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="buyerBusinessName">Business name (optional)</Label>
+                    <Input
+                      id="buyerBusinessName"
+                      value={userData.buyerBusinessName}
+                      onChange={(e) => {
+                        setUserData({ ...userData, buyerBusinessName: e.target.value });
+                        saveFieldToDatabase("buyerBusinessName", e.target.value || null);
+                      }}
+                      disabled={!isEditing}
+                    />
+                    <p className="text-xs text-muted-foreground">Used on your Personal Books purchase records when you buy for a business.</p>
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="buyerTin">Business TIN (optional)</Label>
+                    <Input
+                      id="buyerTin"
+                      value={userData.buyerTin}
+                      onChange={(e) => {
+                        setUserData({ ...userData, buyerTin: e.target.value });
+                        saveFieldToDatabase("buyerTin", e.target.value || null);
+                      }}
+                      disabled={!isEditing}
+                    />
+                    <p className="text-xs text-muted-foreground">Leave blank for personal purchases. Saved once and applied to future purchases.</p>
+                  </div>
                   <div className="space-y-2">
                     <Label htmlFor="firstName">First Name *</Label>
                     <Input
